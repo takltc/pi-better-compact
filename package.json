@@ -1,0 +1,15 @@
+{
+  "name": "pi-better-compact",
+  "version": "1.0.0",
+  "description": "A pi extension that replaces default compaction with a cache-aware dynamic programming economic model",
+  "main": "src/dp-compact.ts",
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "keywords": ["pi", "extension", "compaction", "dynamic-programming", "cache-aware"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

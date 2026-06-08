@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# pi runtime
+.pi/goal-monitor/
+
+# OS
+.DS_Store
+
+# Build
+dist/
+*.log
