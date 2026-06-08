@@ -6,9 +6,12 @@
   "scripts": {
     "check": "tsc --noEmit"
   },
-  "keywords": ["pi", "extension", "compaction", "dynamic-programming", "cache-aware"],
+  "keywords": ["pi-package", "pi", "extension", "compaction", "dynamic-programming", "cache-aware"],
   "author": "",
   "license": "MIT",
+  "pi": {
+    "extensions": ["./src/dp-compact.ts"]
+  },
   "devDependencies": {
     "typescript": "^5.0.0"
   }
