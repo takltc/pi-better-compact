@@ -260,11 +260,15 @@ function extractSessionStats(entries: SessionEntry[]): SessionStats {
 		}
 		if (entry.type === "message" && entry.message.role === "assistant") {
 			agentRequestCount++;
-			const usage = (entry.message as any).usage;
-			if (usage) {
+			const msg = entry.message;
+			if ("usage" in msg && msg.usage) {
+				const usage = msg.usage;
 				const ctxTokens =
 					usage.totalTokens ??
-					usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
+					(usage.input ?? 0) +
+						(usage.output ?? 0) +
+						(usage.cacheRead ?? 0) +
+						(usage.cacheWrite ?? 0);
 				totalInputTokens += ctxTokens;
 				inputCount++;
 			}
@@ -315,9 +319,11 @@ function computeNetBenefit(
 	// ④ Information distortion penalty
 	const term4 = (DP.BETA * (1 - r_t) * R_est * avg * DP.P_INPUT) / 1e6;
 
-	// ⑤ Quality improvement benefit
-	const term5 =
-		(DP.QUALITY_PENALTY * DP.P_INPUT * ((V + T) ** 2 - (V + K) ** 2)) / (M * 1e6);
+	// ⑤ Quality improvement benefit (only when context is large enough)
+	let term5 = 0;
+	if (T > M * 0.30) {
+		term5 = (DP.QUALITY_PENALTY * DP.P_INPUT * ((V + T) ** 2 - (V + K) ** 2)) / (M * 1e6);
+	}
 
 	return term1 - term2 - term3 - term4 + term5;
 }
@@ -340,12 +346,16 @@ function evaluateDpCompaction(
 	contextTokens: number,
 	contextWindow: number,
 ): DpResult | undefined {
-	const boundaryStart =
-		prevCompactionIndex >= 0
-			? (entries.findIndex((e) => e.id === (entries[prevCompactionIndex] as { firstKeptEntryId: string }).firstKeptEntryId) >= 0
-				? entries.findIndex((e) => e.id === (entries[prevCompactionIndex] as { firstKeptEntryId: string }).firstKeptEntryId)
-				: prevCompactionIndex + 1)
-			: 0;
+	let boundaryStart = 0;
+	if (prevCompactionIndex >= 0) {
+		const prevEntry = entries[prevCompactionIndex];
+		if (prevEntry.type === "compaction" && prevEntry.firstKeptEntryId) {
+			const keptIndex = entries.findIndex((e) => e.id === prevEntry.firstKeptEntryId);
+			boundaryStart = keptIndex >= 0 ? keptIndex : prevCompactionIndex + 1;
+		} else {
+			boundaryStart = prevCompactionIndex + 1;
+		}
+	}
 	const boundaryEnd = entries.length;
 
 	if (boundaryStart >= boundaryEnd) return undefined;
@@ -359,7 +369,10 @@ function evaluateDpCompaction(
 	const E =
 		DP.E_FIXED > 0
 			? DP.E_FIXED
-			: Math.max(1, Math.floor(DP.BASELINE_E - stats.currentTurnIndex));
+			: Math.max(
+					Math.floor(DP.BASELINE_E / 2),
+					DP.BASELINE_E - stats.currentTurnIndex,
+				);
 
 	const L =
 		DP.L > 0
@@ -811,14 +824,35 @@ export default function (pi: ExtensionAPI) {
 		const percent = usage.tokens / usage.contextWindow;
 		const state = getState(ctx.sessionManager.getSessionFile());
 
-		const crossedThreshold =
-			state.lastTokens !== null &&
-			state.lastTokens <= usage.contextWindow * DP.CHECK_THRESHOLD &&
-			percent > DP.CHECK_THRESHOLD;
+		// Only evaluate when above check threshold
+		if (percent <= DP.CHECK_THRESHOLD) {
+			state.lastTokens = usage.tokens;
+			return;
+		}
 
+		// Debounce: don't re-evaluate if context hasn't grown meaningfully
+		if (state.lastTokens !== null && usage.tokens <= state.lastTokens * 1.05) {
+			return;
+		}
 		state.lastTokens = usage.tokens;
 
-		if (!crossedThreshold) return;
+		// Run DP decision inline before triggering compact
+		const entries = ctx.sessionManager.getBranch();
+		const contextWindow = usage.contextWindow;
+		const tokensBefore = usage.tokens;
+
+		let prevCompactionIndex = -1;
+		for (let i = entries.length - 1; i >= 0; i--) {
+			if (entries[i].type === "compaction") {
+				prevCompactionIndex = i;
+				break;
+			}
+		}
+
+		const dpResult = evaluateDpCompaction(entries, prevCompactionIndex, tokensBefore, contextWindow);
+		if (!dpResult || (dpResult.netBenefit <= 0 && !dpResult.force)) {
+			return;
+		}
 
 		ctx.compact({
 			onComplete: () => {
@@ -837,7 +871,7 @@ export default function (pi: ExtensionAPI) {
 		handler: async (_args, ctx) => {
 			const usage = ctx.getContextUsage();
 			const state = getState(ctx.sessionManager.getSessionFile());
-			const entries = ctx.sessionManager.getEntries();
+			const entries = ctx.sessionManager.getBranch();
 			const stats = extractSessionStats(entries);
 
 			const lines = [
@@ -863,7 +897,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("dp-eval", {
 		description: "Evaluate DP compaction decision now",
 		handler: async (_args, ctx) => {
-			const entries = ctx.sessionManager.getEntries();
+			const entries = ctx.sessionManager.getBranch();
 			const usage = ctx.getContextUsage();
 			const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow ?? 200000;
 			const tokensBefore = usage?.tokens ?? 0;

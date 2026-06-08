@@ -10,3 +10,7 @@ node_modules/
 # Build
 dist/
 *.log
+
+# Local dev config
+tsconfig.dev.json
+package-lock.json
