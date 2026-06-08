@@ -23,6 +23,22 @@
 
 ## 安装
 
+### 通过 `pi install` 安装（推荐）
+
+全局安装（所有会话可用）：
+
+```bash
+pi install git:github.com/takltc/pi-better-compact
+```
+
+或仅在当前项目本地安装：
+
+```bash
+pi install -l git:github.com/takltc/pi-better-compact
+```
+
+### 手动安装
+
 1. 复制扩展文件到 pi 扩展目录：
 
 ```bash
@@ -30,7 +46,9 @@ mkdir -p ~/.pi/agent/extensions
 cp src/dp-compact.ts ~/.pi/agent/extensions/
 ```
 
-2. 禁用 pi 内置 auto-compact（在 `~/.pi/agent/settings.json` 或项目 `.pi/settings.json`）：
+### 禁用内置自动压缩
+
+安装完成后，禁用 pi 内置 auto-compact（在 `~/.pi/agent/settings.json` 或项目 `.pi/settings.json`）：
 
 ```json
 {
@@ -42,7 +60,7 @@ cp src/dp-compact.ts ~/.pi/agent/extensions/
 }
 ```
 
-3. 启动 pi，扩展会自动加载。
+然后启动 pi，扩展会自动加载。
 
 ## 使用
 

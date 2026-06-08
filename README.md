@@ -23,6 +23,22 @@ A pi extension that replaces the default compaction strategy with a **cache-awar
 
 ## Installation
 
+### Via `pi install` (Recommended)
+
+Install globally (available in all sessions):
+
+```bash
+pi install git:github.com/takltc/pi-better-compact
+```
+
+Or install locally in the current project only:
+
+```bash
+pi install -l git:github.com/takltc/pi-better-compact
+```
+
+### Manual Install
+
 1. Copy the extension file to pi's extensions directory:
 
 ```bash
@@ -30,7 +46,9 @@ mkdir -p ~/.pi/agent/extensions
 cp src/dp-compact.ts ~/.pi/agent/extensions/
 ```
 
-2. Disable pi's built-in auto-compact (in `~/.pi/agent/settings.json` or project `.pi/settings.json`):
+### Disable Built-in Auto-Compact
+
+After installing, disable pi's built-in auto-compact (in `~/.pi/agent/settings.json` or project `.pi/settings.json`):
 
 ```json
 {
@@ -42,7 +60,7 @@ cp src/dp-compact.ts ~/.pi/agent/extensions/
 }
 ```
 
-3. Launch pi — the extension loads automatically.
+Then launch pi — the extension loads automatically.
 
 ## Usage
 
