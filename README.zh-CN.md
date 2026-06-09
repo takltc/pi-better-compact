@@ -23,15 +23,29 @@
 
 ## 安装
 
-### 通过 `pi install` 安装（推荐）
+### 通过 npm 安装（推荐）
 
-全局安装（所有会话可用）：
+从 npm registry 安装（所有会话可用）：
+
+```bash
+pi install npm:pi-better-compact
+```
+
+或仅在当前项目本地安装：
+
+```bash
+pi install -l npm:pi-better-compact
+```
+
+### 通过 Git 安装
+
+直接从 GitHub 安装：
 
 ```bash
 pi install git:github.com/takltc/pi-better-compact
 ```
 
-或仅在当前项目本地安装：
+或本地安装：
 
 ```bash
 pi install -l git:github.com/takltc/pi-better-compact

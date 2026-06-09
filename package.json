@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "A pi extension that replaces default compaction with a cache-aware dynamic programming economic model",
   "main": "src/dp-compact.ts",
+  "files": [
+    "src/",
+    "tsconfig.json"
+  ],
   "scripts": {
     "check": "tsc --noEmit"
   },
@@ -16,6 +20,14 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/takltc/pi-better-compact.git"
+  },
+  "bugs": {
+    "url": "https://github.com/takltc/pi-better-compact/issues"
+  },
+  "homepage": "https://github.com/takltc/pi-better-compact#readme",
   "pi": {
     "extensions": [
       "./src/dp-compact.ts"

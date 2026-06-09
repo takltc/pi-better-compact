@@ -23,15 +23,29 @@ A pi extension that replaces the default compaction strategy with a **cache-awar
 
 ## Installation
 
-### Via `pi install` (Recommended)
+### Via npm (Recommended)
 
-Install globally (available in all sessions):
+Install from the npm registry (available in all sessions):
+
+```bash
+pi install npm:pi-better-compact
+```
+
+Or install locally in the current project only:
+
+```bash
+pi install -l npm:pi-better-compact
+```
+
+### Via Git
+
+Install directly from GitHub:
 
 ```bash
 pi install git:github.com/takltc/pi-better-compact
 ```
 
-Or install locally in the current project only:
+Or locally:
 
 ```bash
 pi install -l git:github.com/takltc/pi-better-compact
