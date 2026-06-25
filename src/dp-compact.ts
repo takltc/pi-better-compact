@@ -17,7 +17,7 @@
  *   4. You can still manually trigger with /compact.
  */
 
-import { complete } from "@earendil-works/pi-ai";
+import { completeSimple } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	convertToLlm,
@@ -289,6 +289,19 @@ function extractSessionStats(entries: SessionEntry[]): SessionStats {
 }
 
 // ============================================================================
+// Compaction index helpers
+// ============================================================================
+
+function findPrevCompactionIndex(entries: SessionEntry[]): number {
+	for (let i = entries.length - 1; i >= 0; i--) {
+		if (entries[i].type === "compaction") {
+			return i;
+		}
+	}
+	return -1;
+}
+
+// ============================================================================
 // DP Net Benefit Computation
 // ============================================================================
 
@@ -361,7 +374,14 @@ function evaluateDpCompaction(
 	if (boundaryStart >= boundaryEnd) return undefined;
 
 	const entryTokens: number[] = entries.map((e) => estimateEntryTokens(e));
-	const T = entryTokens.slice(boundaryStart, boundaryEnd).reduce((a, b) => a + b, 0);
+	// Prefix sum so any range sum is O(1): prefix[i] = sum(entryTokens[0..i-1])
+	const prefix = new Array<number>(entryTokens.length + 1);
+	prefix[0] = 0;
+	for (let i = 0; i < entryTokens.length; i++) {
+		prefix[i + 1] = prefix[i] + entryTokens[i];
+	}
+	const rangeSum = (from: number, to: number) => prefix[to] - prefix[from];
+	const T = rangeSum(boundaryStart, boundaryEnd);
 	const V = DP.V;
 
 	const stats = extractSessionStats(entries);
@@ -395,16 +415,10 @@ function evaluateDpCompaction(
 		const cand = candidates[candidates.length - 1 - idx];
 		if (!cand) continue;
 
-		let K = 0;
-		for (let i = cand.firstKeptEntryIndex; i < boundaryEnd; i++) {
-			K += entryTokens[i];
-		}
+		const K = rangeSum(cand.firstKeptEntryIndex, boundaryEnd);
 
 		const historyEnd = cand.isSplitTurn ? cand.turnStartIndex : cand.firstKeptEntryIndex;
-		let H = 0;
-		for (let i = boundaryStart; i < historyEnd; i++) {
-			H += entryTokens[i];
-		}
+		const H = rangeSum(boundaryStart, historyEnd);
 
 		const netBenefit = computeNetBenefit(K, H, T, V, DP.S, R_est, avg, stats.compactionCount, contextWindow);
 
@@ -530,6 +544,44 @@ Summarize the prefix to provide context for the retained suffix:
 
 Be concise. Focus on what's needed to understand the kept suffix.`;
 
+async function runSummarization(
+	promptText: string,
+	model: any,
+	maxTokens: number,
+	apiKey: string | undefined,
+	headers: Record<string, string> | undefined,
+	signal: AbortSignal,
+	errorLabel: string,
+): Promise<string> {
+	const summarizationMessages = [
+		{
+			role: "user" as const,
+			content: [{ type: "text" as const, text: promptText }],
+			timestamp: Date.now(),
+		},
+	];
+
+	const options: any = { maxTokens, signal };
+	if (apiKey) options.apiKey = apiKey;
+	if (headers) options.headers = headers;
+	if (model.reasoning) options.reasoning = "medium";
+
+	const response = await completeSimple(
+		model,
+		{ systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages },
+		options,
+	);
+
+	if (response.stopReason === "error") {
+		throw new Error(`${errorLabel}: ${response.errorMessage || "Unknown error"}`);
+	}
+
+	return response.content
+		.filter((c: any) => c.type === "text")
+		.map((c: any) => c.text)
+		.join("\n");
+}
+
 async function generateSummary(
 	messages: AgentMessage[],
 	model: any,
@@ -550,8 +602,7 @@ async function generateSummary(
 		basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
 	}
 
-	const llmMessages = convertToLlm(messages);
-	const conversationText = serializeConversation(llmMessages);
+	const conversationText = serializeConversation(convertToLlm(messages));
 
 	let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
 	if (previousSummary) {
@@ -559,33 +610,7 @@ async function generateSummary(
 	}
 	promptText += basePrompt;
 
-	const summarizationMessages = [
-		{
-			role: "user" as const,
-			content: [{ type: "text" as const, text: promptText }],
-			timestamp: Date.now(),
-		},
-	];
-
-	const options: any = { maxTokens, signal };
-	if (apiKey) options.apiKey = apiKey;
-	if (headers) options.headers = headers;
-	if (model.reasoning) options.reasoning = "medium";
-
-	const response = await complete(
-		model,
-		{ systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages },
-		options,
-	);
-
-	if (response.stopReason === "error") {
-		throw new Error(`Summarization failed: ${response.errorMessage || "Unknown error"}`);
-	}
-
-	return response.content
-		.filter((c: any) => c.type === "text")
-		.map((c: any) => c.text)
-		.join("\n");
+	return runSummarization(promptText, model, maxTokens, apiKey, headers, signal, "Summarization failed");
 }
 
 async function generateTurnPrefixSummary(
@@ -601,37 +626,10 @@ async function generateTurnPrefixSummary(
 		model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
 	);
 
-	const llmMessages = convertToLlm(messages);
-	const conversationText = serializeConversation(llmMessages);
+	const conversationText = serializeConversation(convertToLlm(messages));
 	const promptText = `<conversation>\n${conversationText}\n</conversation>\n\n${TURN_PREFIX_SUMMARIZATION_PROMPT}`;
 
-	const summarizationMessages = [
-		{
-			role: "user" as const,
-			content: [{ type: "text" as const, text: promptText }],
-			timestamp: Date.now(),
-		},
-	];
-
-	const options: any = { maxTokens, signal };
-	if (apiKey) options.apiKey = apiKey;
-	if (headers) options.headers = headers;
-	if (model.reasoning) options.reasoning = "medium";
-
-	const response = await complete(
-		model,
-		{ systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages },
-		options,
-	);
-
-	if (response.stopReason === "error") {
-		throw new Error(`Turn prefix summarization failed: ${response.errorMessage || "Unknown error"}`);
-	}
-
-	return response.content
-		.filter((c: any) => c.type === "text")
-		.map((c: any) => c.text)
-		.join("\n");
+	return runSummarization(promptText, model, maxTokens, apiKey, headers, signal, "Turn prefix summarization failed");
 }
 
 // ============================================================================
@@ -680,13 +678,7 @@ export default function (pi: ExtensionAPI) {
 		const usage = ctx.getContextUsage();
 		const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow ?? 200000;
 
-		let prevCompactionIndex = -1;
-		for (let i = branchEntries.length - 1; i >= 0; i--) {
-			if (branchEntries[i].type === "compaction") {
-				prevCompactionIndex = i;
-				break;
-			}
-		}
+		const prevCompactionIndex = findPrevCompactionIndex(branchEntries);
 
 		const dpResult = evaluateDpCompaction(branchEntries, prevCompactionIndex, tokensBefore, contextWindow);
 
@@ -841,13 +833,7 @@ export default function (pi: ExtensionAPI) {
 		const contextWindow = usage.contextWindow;
 		const tokensBefore = usage.tokens;
 
-		let prevCompactionIndex = -1;
-		for (let i = entries.length - 1; i >= 0; i--) {
-			if (entries[i].type === "compaction") {
-				prevCompactionIndex = i;
-				break;
-			}
-		}
+		const prevCompactionIndex = findPrevCompactionIndex(entries);
 
 		const dpResult = evaluateDpCompaction(entries, prevCompactionIndex, tokensBefore, contextWindow);
 		if (!dpResult || (dpResult.netBenefit <= 0 && !dpResult.force)) {
@@ -902,13 +888,8 @@ export default function (pi: ExtensionAPI) {
 			const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow ?? 200000;
 			const tokensBefore = usage?.tokens ?? 0;
 
-			let prevCompactionIndex = -1;
-			for (let i = entries.length - 1; i >= 0; i--) {
-				if (entries[i].type === "compaction") {
-					prevCompactionIndex = i;
-					break;
-				}
-			}
+			const prevCompactionIndex = findPrevCompactionIndex(entries);
+
 
 			const dpResult = evaluateDpCompaction(entries, prevCompactionIndex, tokensBefore, contextWindow);
 			if (!dpResult) {
