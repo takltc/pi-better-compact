@@ -94,6 +94,7 @@ cp src/dp-compact.ts ~/.pi/agent/extensions/
 | `DP_P_OUT` | 15.0 | 输出价格 ($/MTok) |
 | `DP_V` | 5000 | 固定前缀 token（system prompt、tools 等） |
 | `DP_S` | 500 | 预计 summary 输出 token |
+| `DP_L` | 0 | 每轮 agent 请求数，用于估算未来请求总数（为 0 时自动估算） |
 | `DP_BASELINE_E` | 8 | 预计剩余用户输入轮数基准 |
 | `DP_E_FIXED` | 0 | 固定 E（>0 时跳过动态估算） |
 | `DP_R` | 0.8 | 单次摘要信息保留率 |

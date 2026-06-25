@@ -94,6 +94,7 @@ Adjust DP parameters via environment variables:
 | `DP_P_OUT` | 15.0 | Output price ($/MTok) |
 | `DP_V` | 5000 | Fixed prefix tokens (system prompt, tools, etc.) |
 | `DP_S` | 500 | Estimated summary output tokens |
+| `DP_L` | 0 | Requests per turn used to estimate future requests (auto-estimated when 0) |
 | `DP_BASELINE_E` | 8 | Baseline for estimated remaining user turns |
 | `DP_E_FIXED` | 0 | Fixed E (skips dynamic estimation when > 0) |
 | `DP_R` | 0.8 | Single-summary information retention rate |
