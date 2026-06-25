@@ -1,6 +1,6 @@
 {
   "name": "pi-better-compact",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A pi extension that replaces default compaction with a cache-aware dynamic programming economic model",
   "main": "src/dp-compact.ts",
   "files": [
